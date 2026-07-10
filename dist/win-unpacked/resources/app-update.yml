@@ -1,0 +1,4 @@
+owner: donerfolk
+repo: Music-Controller
+provider: github
+updaterCacheDirName: music-controller-updater

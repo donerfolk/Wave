@@ -1,0 +1,25 @@
+directories:
+  output: dist
+  buildResources: build
+appId: com.wave.music-controller
+productName: Wave
+files:
+  - filter:
+      - src/**/*
+      - assets/**/*
+      - scripts/**/*
+asarUnpack:
+  - '**/*.node'
+  - scripts/**
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/appicon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: false
+  createStartMenuShortcut: true
+electronVersion: 42.5.0
