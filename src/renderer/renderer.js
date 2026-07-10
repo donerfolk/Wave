@@ -473,12 +473,12 @@ function scheduleColorRefresh() {
     }, ms);
   }
 }
-function dominantRegion(data, size, x0, y0, x1, y1) {
-  /** @type {Map<number, { n: number, r: number, g: number, b: number }>} */
+function collectBuckets(data, size) {
+  /** @type {Map<number, { n: number, r: number, g: number, b: number, lum: number }>} */
   const buckets = new Map();
 
-  for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
       const i = (y * size + x) * 4;
       const alpha = data[i + 3];
       if (alpha < 100) continue;
@@ -487,37 +487,48 @@ function dominantRegion(data, size, x0, y0, x1, y1) {
       const b = data[i + 2];
       if (r > 248 && g > 248 && b > 248) continue;
       if (r < 8 && g < 8 && b < 8) continue;
+      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
       const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
-      const bucket = buckets.get(key) ?? { n: 0, r: 0, g: 0, b: 0 };
+      const bucket = buckets.get(key) ?? { n: 0, r: 0, g: 0, b: 0, lum: 0 };
       bucket.n += 1;
       bucket.r += r;
       bucket.g += g;
       bucket.b += b;
+      bucket.lum += lum;
       buckets.set(key, bucket);
     }
   }
 
-  let best = null;
-  let bestScore = -1;
-  for (const bucket of buckets.values()) {
-    const r = bucket.r / bucket.n;
-    const g = bucket.g / bucket.n;
-    const b = bucket.b / bucket.n;
-    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-    // ponytail: count×luminance; upgrade path: k-means on top-quartile pixels
-    const score = bucket.n * lum;
-    if (score > bestScore) {
-      bestScore = score;
-      best = bucket;
-    }
+  return [...buckets.values()].map((bucket) => ({
+    r: Math.round(bucket.r / bucket.n),
+    g: Math.round(bucket.g / bucket.n),
+    b: Math.round(bucket.b / bucket.n),
+    n: bucket.n,
+    lum: bucket.lum / bucket.n,
+  }));
+}
+
+function colorDistSq(a, b) {
+  const dr = a.r - b.r;
+  const dg = a.g - b.g;
+  const db = a.b - b.b;
+  return dr * dr + dg * dg + db * db;
+}
+
+/** Pick distinct colors from the full image; first entry is the majority tone. */
+function pickAlbumColors(buckets, max = 6) {
+  const sorted = [...buckets].sort((a, b) => b.n - a.n);
+  const picked = [];
+  const minDistSq = 35 * 35;
+
+  for (const c of sorted) {
+    if (picked.length >= max) break;
+    if (picked.some((p) => colorDistSq(p, c) < minDistSq)) continue;
+    picked.push(c);
   }
 
-  if (!best) return { r: 48, g: 48, b: 52 };
-  return {
-    r: Math.round(best.r / best.n),
-    g: Math.round(best.g / best.n),
-    b: Math.round(best.b / best.n),
-  };
+  if (!picked.length) return [{ r: 48, g: 48, b: 52, n: 1, lum: 48 }];
+  return picked;
 }
 
 /** @type {'color-bends' | 'simple-gradient' | 'album-blur' | 'floating-lines'} */
@@ -580,26 +591,23 @@ function ensureMinBrightness({ r, g, b }, minPeak = 180) {
   };
 }
 
-/** Normalize sampled RGB for shaders — keeps hue, lifts darks, preserves bright samples. */
-function albumColorForShader({ r, g, b }) {
-  const peak = Math.max(r, g, b, 1);
-  const minPeak = 110;
-  if (peak >= minPeak) return { r, g, b };
-  const scale = minPeak / peak;
-  return {
-    r: Math.round(r * scale),
-    g: Math.round(g * scale),
-    b: Math.round(b * scale),
-  };
+/** Lift sampled RGB for shaders — keeps album hue, favors brighter tones. */
+function albumColorForShader(c) {
+  return vibrantize(ensureMinBrightness(c, 130), 1.1);
 }
 
-function shaderPaletteFromSamples(left, center, right) {
-  return [left, center, right].map((c) => rgbToHex(albumColorForShader(c)));
+/** Majority color leads the shader palette; supporting tones fill in around it. */
+function shaderPaletteFromAlbumColors(colors) {
+  if (!colors.length) return NEUTRAL_SHADER;
+  const [dominant, ...rest] = colors;
+  const hero = rgbToHex(vibrantize(ensureMinBrightness(dominant, 150), 1.25));
+  const supporting = rest.map((c) => rgbToHex(albumColorForShader(c)));
+  return [hero, ...supporting].slice(0, 8);
 }
 
 function linesGradientFromPalette(palette) {
   if (!palette || palette.length === 0) return null;
-  if (palette.length >= 3) return palette.slice(0, 3);
+  if (palette.length >= 3) return palette.slice(0, 8);
   if (palette.length === 2) return [palette[0], palette[1], palette[0]];
   return [palette[0], palette[0], palette[0]];
 }
@@ -613,16 +621,16 @@ function samplePaletteFromImage(img) {
 
   ctx.drawImage(img, 0, 0, size, size);
   const { data } = ctx.getImageData(0, 0, size, size);
-  const third = Math.floor(size / 3);
-  const center = dominantRegion(data, size, third, third, size - third - 1, size - third - 1);
-  const left = dominantRegion(data, size, 0, 0, third - 1, size - 1);
-  const right = dominantRegion(data, size, size - third, 0, size - 1, size - 1);
+  const colors = pickAlbumColors(collectBuckets(data, size));
+  const dominant = colors[0];
+  const left = colors[1] ?? dominant;
+  const right = colors[2] ?? left;
 
-  const bendsPalette = shaderPaletteFromSamples(left, center, right);
+  const bendsPalette = shaderPaletteFromAlbumColors(colors);
   const linesGradient = linesGradientFromPalette(bendsPalette);
 
   return {
-    full: center,
+    full: dominant,
     left,
     right,
     bendsPalette,

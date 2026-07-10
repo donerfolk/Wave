@@ -9,14 +9,48 @@
     "stop": "powershell -NoProfile -Command \"Get-Process electron -ErrorAction SilentlyContinue | Stop-Process -Force\"",
     "restart": "npm run stop && npm start",
     "generate-icons": "node scripts/generate-icons.js",
+    "dist": "npm run build:renderer && electron-builder --win",
+    "dist:dir": "npm run build:renderer && electron-builder --win --dir",
     "postinstall": "node -e \"const fs=require('fs');const d='src/renderer/vendor';fs.mkdirSync(d,{recursive:true});for(const f of['three.module.js','three.core.js'])fs.copyFileSync('node_modules/three/build/'+f,d+'/'+f);\""
+  },
+  "build": {
+    "appId": "com.wave.music-controller",
+    "productName": "Wave",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "scripts/**/*"
+    ],
+    "asarUnpack": [
+      "**/*.node",
+      "scripts/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/appicon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": true
+    }
   },
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@coooookies/windows-smtc-monitor": "^1.0.12",
     "color-thief-browser": "^2.0.2",
-    "electron": "^42.5.0",
     "framer-motion": "^12.23.12",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
@@ -24,6 +58,8 @@
     "win-media-control": "^0.1.1"
   },
   "devDependencies": {
+    "electron": "^42.5.0",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.25.9"
   }
 }

@@ -5,10 +5,10 @@
 
 const { parentPort } = require('worker_threads');
 const { execFileSync } = require('child_process');
-const path = require('path');
 const { SMTCMonitor } = require('@coooookies/windows-smtc-monitor');
+const { fromRoot } = require('./app-root');
 
-const PLAYBACK_SCRIPT = path.join(__dirname, '..', 'scripts', 'apple-music-playback.ps1');
+const PLAYBACK_SCRIPT = fromRoot('scripts', 'apple-music-playback.ps1');
 // ponytail: UI Automation query is ~5s; cache and refresh on toggle invalidation or every 3s
 const TOGGLE_QUERY_MS = 3000;
 

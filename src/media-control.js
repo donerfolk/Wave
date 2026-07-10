@@ -3,10 +3,10 @@
  */
 
 const { spawn } = require('child_process');
-const path = require('path');
+const { fromRoot } = require('./app-root');
 
-const DAEMON_SCRIPT = path.join(__dirname, '..', 'scripts', 'media-daemon.ps1');
-const PLAYBACK_SCRIPT = path.join(__dirname, '..', 'scripts', 'apple-music-playback.ps1');
+const DAEMON_SCRIPT = fromRoot('scripts', 'media-daemon.ps1');
+const PLAYBACK_SCRIPT = fromRoot('scripts', 'apple-music-playback.ps1');
 
 /** @type {import('child_process').ChildProcess | null} */
 let daemon = null;

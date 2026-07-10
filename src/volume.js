@@ -3,10 +3,10 @@
  */
 
 const { spawn } = require('child_process');
-const path = require('path');
 const readline = require('readline');
+const { fromRoot } = require('./app-root');
 
-const DAEMON_SCRIPT = path.join(__dirname, '..', 'scripts', 'volume-daemon.ps1');
+const DAEMON_SCRIPT = fromRoot('scripts', 'volume-daemon.ps1');
 
 /** @type {import('child_process').ChildProcess | null} */
 let daemon = null;
