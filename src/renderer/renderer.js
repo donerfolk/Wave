@@ -498,8 +498,18 @@ function dominantRegion(data, size, x0, y0, x1, y1) {
   }
 
   let best = null;
+  let bestScore = -1;
   for (const bucket of buckets.values()) {
-    if (!best || bucket.n > best.n) best = bucket;
+    const r = bucket.r / bucket.n;
+    const g = bucket.g / bucket.n;
+    const b = bucket.b / bucket.n;
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    // ponytail: count×luminance; upgrade path: k-means on top-quartile pixels
+    const score = bucket.n * lum;
+    if (score > bestScore) {
+      bestScore = score;
+      best = bucket;
+    }
   }
 
   if (!best) return { r: 48, g: 48, b: 52 };
@@ -570,11 +580,12 @@ function ensureMinBrightness({ r, g, b }, minPeak = 180) {
   };
 }
 
-/** Darken sampled RGB for shaders — keeps album hue, caps brightness. */
+/** Normalize sampled RGB for shaders — keeps hue, lifts darks, preserves bright samples. */
 function albumColorForShader({ r, g, b }) {
   const peak = Math.max(r, g, b, 1);
-  const target = Math.min(peak, 130);
-  const scale = target / peak;
+  const minPeak = 110;
+  if (peak >= minPeak) return { r, g, b };
+  const scale = minPeak / peak;
   return {
     r: Math.round(r * scale),
     g: Math.round(g * scale),
